@@ -1,79 +1,30 @@
-// 📁 File: api/webhook.js
-import { middleware, Client } from '@line/bot-sdk';
-import { config } from 'dotenv';
-import fs from 'fs';
-import path from 'path';
-
-config();
-
-const client = new Client({
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET,
-});
-
-const logWebhook = (data) => {
-  const logPath = path.resolve('./logs');
-  if (!fs.existsSync(logPath)) fs.mkdirSync(logPath);
-  const file = path.join(logPath, `${new Date().toISOString().split('T')[0]}.log`);
-  fs.appendFileSync(file, JSON.stringify(data) + '\n');
-};
-
 export default async function handler(req, res) {
-  if (req.method === 'GET') {
-    res.status(200).send('🔧 LINE Bot is running and ready to receive webhooks.');
-    return;
-  }
-
-  if (req.method !== 'POST') {
-    res.status(405).send('Method Not Allowed');
-    return;
-  }
-
-  const events = req.body.events;
-  logWebhook(req.body);
-
-  if (!Array.isArray(events)) {
-    res.status(400).send('Invalid webhook payload');
-    return;
-  }
-
-  await Promise.all(events.map(async (event) => {
-    if (event.type === 'message' && event.message.type === 'text') {
-      const text = event.message.text.toLowerCase();
-      let reply = 'พิมพ์ !today เพื่อดูอีเวนต์วันนี้ หรือ !all เพื่อดูทั้งหมดครับ';
-
-      if (text.includes('!today') || text.includes('!all')) {
-        const puppeteer = require('puppeteer');
-        const cheerio = require('cheerio');
-
-        const browser = await puppeteer.launch({ headless: 'new' });
-        const page = await browser.newPage();
-        await page.goto('https://ra.co/events/th/bangkok', { waitUntil: 'networkidle2' });
-        const html = await page.content();
-        await browser.close();
-
-        const $ = cheerio.load(html);
-        const events = [];
-        $('a.event-item').each((i, el) => {
-          const title = $(el).find('.title').text().trim();
-          const date = $(el).find('.date').text().trim();
-          if (title && date) events.push(`${date}: ${title}`);
-        });
-
-        if (text.includes('!today')) {
-          const today = new Date().toLocaleDateString('en-GB');
-          reply = events.filter(e => e.includes(today)).join('\n') || 'ไม่พบอีเวนต์วันนี้ครับ';
-        } else {
-          reply = events.slice(0, 10).join('\n');
-        }
-      }
-
-      await client.replyMessage(event.replyToken, {
-        type: 'text',
-        text: reply,
-      });
+  try {
+    if (req.method === 'GET') {
+      return res.status(200).send('🔧 LINE Bot is running and ready to receive webhooks.');
     }
-  }));
 
-  res.status(200).send('OK');
+    if (req.method !== 'POST') {
+      return res.status(405).send('Method Not Allowed');
+    }
+
+    const events = req.body.events;
+    if (!Array.isArray(events)) {
+      return res.status(400).send('Invalid webhook payload');
+    }
+
+    await Promise.all(events.map(async (event) => {
+      if (event.type === 'message' && event.message.type === 'text') {
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: 'บอทตอบรับแล้วครับ',
+        });
+      }
+    }));
+
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('❌ Webhook Error:', error);
+    res.status(500).send('Internal Server Error');
+  }
 }
