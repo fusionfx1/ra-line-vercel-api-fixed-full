@@ -1,5 +1,8 @@
+// 📁 File: api/webhook.js
 import { middleware, Client } from '@line/bot-sdk';
 import { config } from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 
 config();
 
@@ -8,13 +11,27 @@ const client = new Client({
   channelSecret: process.env.LINE_CHANNEL_SECRET,
 });
 
+const logWebhook = (data) => {
+  const logPath = path.resolve('./logs');
+  if (!fs.existsSync(logPath)) fs.mkdirSync(logPath);
+  const file = path.join(logPath, `${new Date().toISOString().split('T')[0]}.log`);
+  fs.appendFileSync(file, JSON.stringify(data) + '\n');
+};
+
 export default async function handler(req, res) {
+  if (req.method === 'GET') {
+    res.status(200).send('🔧 LINE Bot is running and ready to receive webhooks.');
+    return;
+  }
+
   if (req.method !== 'POST') {
     res.status(405).send('Method Not Allowed');
     return;
   }
 
   const events = req.body.events;
+  logWebhook(req.body);
+
   if (!Array.isArray(events)) {
     res.status(400).send('Invalid webhook payload');
     return;
